@@ -1,0 +1,9 @@
+boto3
+colormath
+discord-py[voice]
+matplotlib
+mmh3
+mysql-connector-python
+numpy
+pytest
+requests

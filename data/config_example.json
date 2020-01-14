@@ -1,0 +1,30 @@
+{
+  "env": "prod",
+  "envs": {
+
+    "prod": {
+      "discord": {
+        "bot_token": "DISCORD_BOT_TOKEN"
+      },
+      "mysql": {
+        "use_aws_secrets_manager": true,
+        "secret_name": "my_secret",
+        "region_name": "us-east-1",
+        "database": "my_db"
+      }
+    },
+
+    "dev": {
+      "discord": {
+        "bot_token": "DISCORD_BOT_TOKEN"
+      },
+      "mysql": {
+        "host": "localhost",
+        "username": "root",
+        "password": "12345",
+        "database": "my_db"
+      }
+    }
+
+  }
+}
