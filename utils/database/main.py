@@ -13,7 +13,8 @@ import utils.database.config as db_config
 logger = logging.getLogger(__name__)
 
 if 'mysql' in config:
-    if config['mysql']['use_aws_secrets_manager']:
+    if ('use_aws_secrets_manager' in config['mysql']
+            and config['mysql']['use_aws_secrets_manager']):
         from utils.aws import aws
         credentials = aws.get_rds_secret(config['mysql']['secret_name'],
                                          config['mysql']['region_name'])
