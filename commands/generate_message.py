@@ -10,7 +10,12 @@ from utils.database.misc import LimitTuple
 from utils.database.pos_tagging import get_random_words_by_tag
 from utils.errors import UserFeedbackError
 
-nlp = spacy.load('en_core_web_sm')
+try:
+    nlp = spacy.load('en_core_web_sm')
+except OSError:
+    # The language model wasn't found; ignore
+    pass
+
 CHAR_LIMIT = 2048
 TAGS_MAP: Dict[str, Set[str]] = {
     'ADJ': {
