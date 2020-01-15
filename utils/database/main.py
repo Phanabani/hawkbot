@@ -18,16 +18,16 @@ if 'mysql' in config:
         from utils.aws import aws
         credentials = aws.get_rds_secret(config['mysql']['secret_name'],
                                          config['mysql']['region_name'])
+        credentials['database'] = config['mysql']['database']
     else:
         credentials = config['mysql']
 
     cnx = mysql.connector.connect(
-        ssl_disabled=False,
         user=credentials['username'],
         password=credentials['password'],
         host=credentials['host'],
         database=credentials['database'],
-        auth_plugin='mysql_native_password'
+        use_pure=True
     )
 else:
     # TODO handle errors from attempting to use this null connection
