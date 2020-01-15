@@ -12,7 +12,11 @@ from utils.database.misc import flat_pruned_list
 from utils.database.main import cnx, supply_cursor
 
 logger = logging.getLogger(__name__)
-nlp = spacy.load('en_core_web_sm')
+try:
+    nlp = spacy.load('en_core_web_sm')
+except OSError:
+    # The language model wasn't found; ignore
+    pass
 
 
 def _create_where_statement(users: int = 0,
