@@ -255,12 +255,18 @@ class Grammar:
         'generate':
             CommandGrammar('generate')
             .add_desc('Generate a message based on what users have said before')
+            # .add_param('algorithm', ChoiceParam, alias='a',
+            #            help='`original`/`markov`/`1` is the original '
+            #                 'Markov-chain-based algorithm, '
+            #                 '`madlibs`/`2` is a new Mad-Libs-inspired '
+            #                 'algorithm (uses part-of-speech tagging)',
+            #            _choices={'1', 'original', 'markov', '2', 'madlibs'},
+            #            _default='original')
             .add_param('algorithm', ChoiceParam, alias='a',
                        help='`original`/`markov`/`1` is the original '
-                            'Markov-chain-based algorithm, '
-                            '`madlibs`/`2` is a new Mad-Libs-inspired '
-                            'algorithm (uses part-of-speech tagging)',
-                       _choices={'1', 'original', 'markov', '2', 'madlibs'},
+                            'Markov-chain-based algorithm. '
+                            'New algorithms may be added in the future',
+                       _choices={'1', 'original', 'markov'},
                        _default='original')
             .add_param('users', UsersParam, alias='u')
             .add_param('channels', ChannelsParam, alias='c')

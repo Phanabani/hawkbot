@@ -670,9 +670,9 @@ class Hawkbot(discord.Client):
         gen_msg = await chan.send(embed=embed)
 
         # AI generated image for content
-        image = gan_image(final_msg)
-        if image:
-            await chan.send(file=discord.File(image, 'rquote.jpg'))
+        # image = gan_image(final_msg)
+        # if image:
+        #     await chan.send(file=discord.File(image, 'rquote.jpg'))
 
         return gen_msg
 
