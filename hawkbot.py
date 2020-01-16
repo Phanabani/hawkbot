@@ -231,6 +231,7 @@ class Hawkbot(discord.Client):
         await self.vsauce(msg)
         await self.but_i_love_chef(msg)
         await self.sayori(msg)
+        await self.ew(msg)
 
     @staticmethod
     def create_help_embed(command_name: str,
@@ -1019,6 +1020,11 @@ class Hawkbot(discord.Client):
         content = msg.content.lower()
         if content in {'sayori', 'sayonara', 'door'}:
             await play_audio_file(msg, 'd.wav')
+
+    async def ew(self, msg):
+        content = msg.content.lower()
+        if content == 'ew':
+            await play_audio_file(msg, 'EW_DUDE_WTF.wav')
 
 
 if __name__ == '__main__':
