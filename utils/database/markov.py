@@ -117,5 +117,9 @@ def get_potentials(guild_id: int, base: str,
 
     potentials = []
     for p in cur:
+        if not isinstance(p[0], str):
+            # TODO I don't know why this is sometimes giving me an int
+            logger.warning(f'Markov potential {p[0]} is not a string')
+            continue
         potentials.extend(p[0].split(' '))
     return potentials
