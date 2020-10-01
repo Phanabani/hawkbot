@@ -17,7 +17,6 @@ from utils.config import config
 from utils.discord_utils import send_error, play_audio_file
 from utils.errors import UserFeedbackError
 import utils.misc as misc_utils
-from vibe_check import hawktober as hawktober_gen
 
 EMOJIS = {c: chr(i + 0x1f1e6) for i, c in enumerate(string.ascii_lowercase)}
 REPEAT_EMOJI = '🔂'
@@ -101,7 +100,7 @@ class Hawkbot(discord.Client):
 
     async def send_hawktober(self):
         channel: discord.TextChannel = self.get_channel(761118267384660019)
-        await channel.send(hawktober_gen())
+        await channel.send(commands.hawktober())
 
     async def hawktober_scheduler(self):
         delta = timedelta(seconds=5)

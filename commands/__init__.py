@@ -1,1 +1,1 @@
-from .vibe_check import vibe_check
+from .vibe_check import *
