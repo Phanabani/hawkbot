@@ -103,12 +103,13 @@ class Hawkbot(discord.Client):
         await channel.send(commands.hawktober())
 
     async def hawktober_scheduler(self):
-        delta = timedelta(seconds=5)
+        delta = timedelta(days=1)
         run_time = datetime(2020, 10, 1, 5)
 
         while run_time < datetime(2020, 11, 1, 5):
             await discord.utils.sleep_until(run_time)
             await self.send_hawktober()
+            await asyncio.sleep(1)
             run_time += delta
 
     async def on_ready(self):
