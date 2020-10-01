@@ -1,7 +1,7 @@
 ﻿import asyncio
 from collections import deque, defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import discord
 import logging
 from pathlib import Path
@@ -14,13 +14,13 @@ from typing import *
 import commands
 from commands.parser import Parser, ParsedCommand, Grammar
 from commands.parser.parameter_types import *
-from utils.api_requests.gan_image import gan_image
 from utils.config import config
 import utils.database as db
 import utils.discord_utils as dc_utils
 from utils.discord_utils import send_error, play_audio_file
 from utils.errors import UserFeedbackError, ErrorStrings, typecheck
 import utils.misc as misc_utils
+from vibe_check import hawktober as hawktober_gen
 
 EMOJIS = {c: chr(i + 0x1f1e6) for i, c in enumerate(string.ascii_lowercase)}
 REPEAT_EMOJI = '🔂'
@@ -125,8 +125,22 @@ class Hawkbot(discord.Client):
             'last_command': None
         }
 
+    async def send_hawktober(self):
+        channel: discord.TextChannel = self.get_channel(761118267384660019)
+        await channel.send(hawktober_gen())
+
+    async def hawktober_scheduler(self):
+        delta = timedelta(seconds=5)
+        run_time = datetime(2020, 10, 1, 5)
+
+        while run_time < datetime(2020, 11, 1, 5):
+            await discord.utils.sleep_until(run_time)
+            await self.send_hawktober()
+            run_time += delta
+
     async def on_ready(self):
         logger.info('Hawkbot client started')
+        asyncio.run_coroutine_threadsafe(self.hawktober_scheduler(), self.loop)
 
     async def on_message(self, msg):
         if msg.author == self.user:
@@ -212,6 +226,8 @@ class Hawkbot(discord.Client):
             await self.random_image(msg=msg, cmd=cmd)
         elif root == 'mstats':
             await self.message_stats(msg=msg, cmd=cmd)
+        elif root == 'hawktober':
+            await self.send_hawktober()
         return True
 
     async def ranked_trio_memes(self, msg):

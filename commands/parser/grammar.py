@@ -250,7 +250,11 @@ class Grammar:
         'vibe check':
             CommandGrammar('vibe check')
             .add_desc('how are u vibin?'),
-        
+
+        'hawktober':
+            CommandGrammar('hawktober')
+            .add_desc('Get a hawktober prompt'),
+
         'gen': 'generate',
         'generate':
             CommandGrammar('generate')
