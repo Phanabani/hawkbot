@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 import discord
 import logging
 from pathlib import Path
-import random
 import re
 import string
 import sys
@@ -15,10 +14,8 @@ import commands
 from commands.parser import Parser, ParsedCommand, Grammar
 from commands.parser.parameter_types import *
 from utils.config import config
-import utils.database as db
-import utils.discord_utils as dc_utils
 from utils.discord_utils import send_error, play_audio_file
-from utils.errors import UserFeedbackError, ErrorStrings, typecheck
+from utils.errors import UserFeedbackError
 import utils.misc as misc_utils
 from vibe_check import hawktober as hawktober_gen
 
@@ -50,28 +47,6 @@ class LastCommand:
     function: BotCommandType
     args: Tuple
     kwargs: Dict[str, Any]
-
-
-class PrefixStore:
-
-    __slots__ = ['_prefixes', 'default']
-
-    def __init__(self, default: Optional[str] = None):
-        self._prefixes = {}
-        self.default = default
-
-    def __getitem__(self, guild_id: int):
-        typecheck(guild_id, int, 'guild_id')
-        if guild_id not in self._prefixes:
-            prefix = db.config.get_prefix(guild_id)
-            self._prefixes[guild_id] = (self.default if prefix is None
-                                        else prefix)
-        return self._prefixes[guild_id]
-
-    def __setitem__(self, guild_id: int, prefix: Optional[str]):
-        typecheck(guild_id, int, 'guild_id')
-        db.config.set_prefix(guild_id, prefix)
-        self._prefixes[guild_id] = self.default if prefix is None else prefix
 
 
 def repeatable(f: BotCommandType):
@@ -114,7 +89,6 @@ class Hawkbot(discord.Client):
         super().__init__(**kwargs)
         self.channel_memory: Dict[str, any] = \
             defaultdict(self._channel_memory_factory)
-        self.prefixes = PrefixStore(default=self.default_prefix)
         self.parser = Parser()
 
     @staticmethod
@@ -164,25 +138,9 @@ class Hawkbot(discord.Client):
             return
         if await self.repeat_command_reaction(reaction, user):
             return
-        if await self.random_quote_reveal(reaction, user):
-            return
-
-    async def on_raw_reaction_add(self, payload):
-        if payload.user_id == self.user.id:
-            return
-
-        if await self.pin_msg(payload):
-            return
-
-    async def on_raw_reaction_remove(self, payload):
-        if payload.user_id == self.user.id:
-            return
-
-        if await self.unpin_msg(payload):
-            return
 
     async def commands(self, msg):
-        prefix = self.prefixes[msg.guild.id]
+        prefix = ''
         if not msg.content.startswith(prefix):
             return False
 
@@ -193,19 +151,10 @@ class Hawkbot(discord.Client):
         root = cmd.base.root
         name = cmd.base.name
 
-        if root == 'admin' and msg.author.id == config['owner_id']:
-            if name == 'admin init guild':
-                await self.init_guild(msg=msg)
-            elif name == 'admin download':
-                await self.download_messages(msg=msg, cmd=cmd)
-            elif name == 'admin chain':
-                await self.create_chain(msg=msg)
-        elif root == 'ping':
+        if root == 'ping':
             await self.ping(msg=msg)
         elif root == 'help':
             await self.help(msg=msg, cmd=cmd)
-        elif root == 'config':
-            await self.config(msg=msg, cmd=cmd)
         elif root == 'again':
             await self.again(msg=msg)
         elif root == 'cleanse':
@@ -218,14 +167,6 @@ class Hawkbot(discord.Client):
             await self.channel_portal(msg=msg, cmd=cmd)
         elif name == 'vibe check':
             await self.vibe_check(msg=msg)
-        elif root == 'generate':
-            await self.generate_message(msg=msg, cmd=cmd)
-        elif root == 'rquote':
-            await self.random_quote(msg=msg, cmd=cmd)
-        elif root == 'rimage':
-            await self.random_image(msg=msg, cmd=cmd)
-        elif root == 'mstats':
-            await self.message_stats(msg=msg, cmd=cmd)
         elif root == 'hawktober':
             await self.send_hawktober()
         return True
@@ -379,83 +320,6 @@ class Hawkbot(discord.Client):
                               color=color)
         await channel.send(embed=embed)
 
-    async def config(self, msg: discord.Message, cmd: ParsedCommand):
-        chan: discord.TextChannel = msg.channel
-        guild: discord.Guild = msg.guild
-
-        subcommand = cmd.base.path[1]
-        if subcommand == 'pins_channel':
-            action = cast(ChoiceParam, cmd.action).value
-
-            if action is None:
-                # Get
-                pins_channel = db.config.get_pins_channel(guild.id)
-                pins_channel_name = 'None'
-                if pins_channel:
-                    pins_channel_name = \
-                        f'#{guild.get_channel(pins_channel).name}'
-                await self.send_config_msg(chan, 'Current pins channel',
-                                           pins_channel_name)
-
-            elif action == 'set':
-                db.config.set_pins_channel(guild.id, chan.id)
-                await self.send_config_msg(chan, 'Pins channel set')
-
-            elif action == 'remove':
-                db.config.set_pins_channel(guild.id, None)
-                await self.send_config_msg(chan, 'Pins channel removed')
-
-        elif subcommand == 'prefix':
-            action = cmd.base.path[2] if len(cmd.base.path) == 3 else None
-
-            if action is None:
-                # Get
-                current_prefix = self.prefixes[guild.id]
-                await self.send_config_msg(chan, 'Current prefix',
-                                           f'"{current_prefix}"')
-
-            elif action == 'set':
-                new_prefix = cast(QuotedStringParam, cmd.prefix).value
-                self.prefixes[guild.id] = new_prefix
-                await self.send_config_msg(chan,
-                                           f'Changed command prefix to '
-                                           f'{new_prefix}')
-
-            elif action == 'reset':
-                self.prefixes[guild.id] = None
-                await self.send_config_msg(chan,
-                                           f'Reset command prefix to '
-                                           f'"{self.default_prefix}"')
-
-        elif subcommand == 'download_channels_blacklist':
-            action = cast(ChoiceParam, cmd.action).value
-
-            if action is None:
-                # Get
-                channel_ids = db.config.get_channel_download_blacklist(guild.id)
-                channel_names = []
-                # noinspection PyShadowingBuiltins
-                for id in channel_ids:
-                    channel_names.append(guild.get_channel(id).name)
-                channel_names = (', '.join(channel_names)
-                                 if channel_names else 'None')
-                await self.send_config_msg(chan,
-                                           'Download blacklisted channels',
-                                           channel_names)
-
-            elif action == 'add':
-                db.config.add_channel_to_download_blacklist(guild.id, chan.id)
-                await self.send_config_msg(chan,
-                                           'Added this channel to the '
-                                           'download blacklist')
-
-            elif action == 'remove':
-                db.config.remove_channel_from_download_blacklist(guild.id,
-                                                                 chan.id)
-                await self.send_config_msg(chan,
-                                           'Removed this channel to the '
-                                           'download blacklist')
-
     async def again(self, msg):
         chan = msg.channel
         last_cmd: LastCommand = self.channel_memory[chan]['last_command'][0]
@@ -544,358 +408,6 @@ class Hawkbot(discord.Client):
     async def vibe_check(self, msg: discord.Message):
         chan = msg.channel
         await chan.send(commands.vibe_check())
-
-    async def init_guild(self, msg: discord.Message):
-        db.main.init_guild(msg.guild)
-
-    async def download_messages(self, msg: discord.Message, cmd: ParsedCommand):
-        chan = msg.channel
-
-        if not cmd.channels.names:
-            channels = msg.guild.text_channels
-        else:
-            channels = cmd.channels.resolve(msg.guild).channels
-            if not channels:
-                await send_error(chan, 'Could not find this channel.')
-                return True
-
-        embed = discord.Embed(title='Downloading channels')
-        for c in channels:
-            embed.add_field(name=c.name, value='⬛', inline=False)
-
-        msg: discord.Message = await chan.send(embed=embed)
-        await asyncio.sleep(0.25)
-
-        for i, c in enumerate(channels):
-            embed.set_field_at(i, name=embed.fields[i].name,
-                               value='🕗', inline=False)
-            await msg.edit(embed=embed)
-
-            start_time = datetime.now()
-            # noinspection PyBroadException
-            try:
-                await db.messages.download_messages(c)
-            except db.messages.SkippedBlacklistedChannel:
-                display_text = '↩ Channel skipped (blacklisted)'
-            except discord.errors.Forbidden:
-                display_text = '⚠ Channel access denied'
-            except Exception:
-                logger.error('Uncaught exception in download:\n', exc_info=True)
-                display_text = '⚠ Runtime error'
-            else:
-                display_text = '✅'
-
-            time_elapsed = round((datetime.now() - start_time).total_seconds(),
-                                 2)
-            display_text += f' ({time_elapsed} s)'
-            embed.set_field_at(i, name=embed.fields[i].name,
-                               value=display_text, inline=False)
-        await msg.edit(embed=embed)
-
-    async def create_chain(self, msg: discord.Message):
-        chan = msg.channel
-
-        embed = discord.Embed(title='Markov chain')
-        embed.add_field(name='Generating chain', value='🕗', inline=False)
-
-        msg: discord.Message = await chan.send(embed=embed)
-
-        start_time = datetime.now()
-        # noinspection PyBroadException
-        try:
-            # Run without blocking
-            await self.loop.run_in_executor(None, db.markov.create_chain,
-                                            msg.guild.id)
-        except Exception as e:
-            logger.error(e)
-            display_text = '⚠ Runtime error'
-        else:
-            display_text = '✅'
-
-        time_elapsed = round((datetime.now() - start_time).total_seconds(), 2)
-        display_text += f' ({time_elapsed} s)'
-        embed.set_field_at(0, name=embed.fields[0].name,
-                           value=display_text, inline=False)
-        await msg.edit(embed=embed)
-
-    @repeatable
-    async def generate_message(self, msg: discord.Message,
-                               cmd: ParsedCommand):
-        chan = msg.channel
-
-        algorithm = cmd.algorithm.value
-        if algorithm in {'1', 'original', 'markov'}:
-            generation_function = commands.generate_message
-        # elif algorithm in {'2', 'madlibs'}:
-        #     generation_function = commands.generate_message2
-        else:
-            raise UserFeedbackError(f'This algorithm ({algorithm}) does not '
-                                    f'exist')
-
-        users = cast(UsersParam, cmd.users)
-        if users.names == ['me']:
-            user_ids = msg.author.id
-            color = msg.author.color
-            output_name = msg.author.name
-        elif users:
-            users.resolve(msg.guild)
-            if len(users.users) == 1:
-                color = users.users[0].color
-            else:
-                # Randomize the embed color if multiple users used
-                color = misc_utils.random_color()
-            user_ids = users.ids
-            output_name = misc_utils.merge_names(users.names)
-        else:
-            user_ids = None
-            output_name = misc_utils.merge_names(
-                [u.name for u in dc_utils.get_non_bot_users(msg.guild)])
-            color = misc_utils.random_color()
-
-        channels = cast(ChannelsParam, cmd.channels)
-        channel_id = None
-        if channels:
-            channels.resolve(msg.guild)
-            channel_id = channels.ids[0]
-
-        limit_min = cast(LimitParam, cmd.limit).min
-        limit_max = cast(LimitParam, cmd.limit).max
-        count = cast(CountParam, cmd.count).count
-
-        blueprint = cast(QuotedStringParam, cmd.blueprint)
-        multiline = blueprint.quote_type == '`'
-        if multiline:
-            blueprints = blueprint.value.split('\n')
-        else:
-            blueprints = [blueprint.value]
-
-        final_msgs = []
-        for i in range(count):
-            this_iter = []
-            for blueprint in blueprints:
-                generation = generation_function(
-                    msg.guild.id,
-                    users=user_ids,
-                    channel=channel_id,
-                    blueprint=blueprint, word_limit=(limit_min, limit_max)
-                )
-                this_iter.append(generation)
-            final_msgs.append('\n\n'.join(this_iter))
-        final_msg = '\n\n'.join(final_msgs)
-        embed = discord.Embed(description=final_msg,
-                              title=f'{output_name} once said...',
-                              color=color)
-        gen_msg = await chan.send(embed=embed)
-
-        # AI generated image for content
-        # image = gan_image(final_msg)
-        # if image:
-        #     await chan.send(file=discord.File(image, 'rquote.jpg'))
-
-        return gen_msg
-
-    @repeatable
-    async def random_quote(self, msg: discord.Message,
-                           cmd: ParsedCommand):
-        chan = msg.channel
-
-        user_ids = None
-        hide_author = cmd.base.name == 'rquote guess'
-        if not hide_author and cmd.users:
-            users = cast(UsersParam, cmd.users)
-            users.resolve(msg.guild)
-            user_ids = users.ids
-
-        channels = cast(ChannelsParam, cmd.channels)
-        channel_id = None
-        if channels:
-            channels.resolve(msg.guild)
-            channel_id = channels.ids[0]
-
-        limit_min = cast(LimitParam, cmd.limit).min
-        limit_max = cast(LimitParam, cmd.limit).max
-        count = cast(CountParam, cmd.count).count
-
-        sent_msg = None
-        for msg in commands.random_message(msg.guild.id, users=user_ids,
-                                           channel=channel_id,
-                                           word_limit=(limit_min, limit_max),
-                                           count=count, content=True):
-            embed = discord.Embed(description=msg.content,
-                                  title=msg.author.name,
-                                  timestamp=msg.created_at,
-                                  color=misc_utils.random_color())
-            if hide_author:
-                embed.title = '???'
-                sent_msg = await chan.send(embed=embed)
-                await sent_msg.add_reaction('❔')
-
-                rquote_memory = self.channel_memory[chan]['rquote']
-                rquote_memory[sent_msg.id] = msg
-            else:
-                embed.description += f'\n[[Context]]({msg.jump_url})'
-                sent_msg = await chan.send(embed=embed)
-
-            # AI generated image for content
-            # image = gan_image(msg.content)
-            # if image:
-            #     await chan.send(file=discord.File(image, 'rquote.jpg'))
-
-            await asyncio.sleep(0.25)
-        return sent_msg or True
-
-    async def random_quote_reveal(self, reaction, user):
-        msg = reaction.message
-        chan = msg.channel
-        mem = self.channel_memory[chan]['rquote']
-        if msg.id not in mem:
-            return False
-        if reaction.emoji != '❔':
-            return False
-        r_msg = mem[msg.id]
-        embed = msg.embeds[0]
-        embed.title = r_msg.author.name
-        embed.description += f'\n[[Context]]({r_msg.jump_url})'
-        await reaction.remove(user)
-        await reaction.remove(self.user)
-        await msg.edit(embed=embed)
-
-    @repeatable
-    async def random_image(self, msg: discord.Message,
-                           cmd: ParsedCommand):
-        chan = msg.channel
-
-        users = cast(UsersParam, cmd.users)
-        user_ids = None
-        if users:
-            users.resolve(msg.guild)
-            user_ids = users.ids
-
-        channels = cast(ChannelsParam, cmd.channels)
-        channel_id = None
-        if channels:
-            channels.resolve(msg.guild)
-            channel_id = channels.ids[0]
-
-        count = cast(CountParam, cmd.count).count
-
-        sent_msg = None
-        for msg in commands.random_message(msg.guild.id, users=user_ids,
-                                           channel=channel_id, count=count,
-                                           images=True):
-            embed = discord.Embed(title=msg.author.name,
-                                  description=f'\n[[Context]]({msg.jump_url})',
-                                  timestamp=msg.created_at,
-                                  color=misc_utils.random_color())
-            image_url = random.choice(msg.images)
-            embed.set_image(url=image_url)
-            sent_msg = await chan.send(embed=embed)
-        return sent_msg or True
-
-    async def message_stats(self, msg: discord.Message, cmd: ParsedCommand):
-        chan = msg.channel
-
-        plot = cmd.base.name == 'mstats plot'
-
-        users = cast(UsersParam, cmd.users)
-        user_ids = None
-        if users:
-            users.resolve(msg.guild)
-            user_ids = users.ids
-
-        channels = cast(ChannelsParam, cmd.channels)
-        channel_ids = None
-        if channels:
-            channels.resolve(msg.guild)
-            channel_ids = channels.ids
-
-        flags = cast(FlagsParam, cmd.flags).flags
-        case_sensitive = 'c' in flags
-        anywhere = 'a' in flags
-
-        pattern = cast(QuotedStringParam, cmd.pattern)
-        search_pattern = pattern.value
-        if not pattern.is_regex:
-            search_pattern = re.escape(search_pattern)
-        if not anywhere:
-            search_pattern = rf'\b{search_pattern}\b'
-
-        # Execute
-        stats = commands.message_stats(
-            msg.guild.id, search_pattern, users=user_ids,
-            channels=channel_ids, case_sensitive=case_sensitive, plot=plot)
-
-        if not plot:
-            title = 'Stats for {}'.format(f'regex pattern /{pattern.value}/'
-                                          if pattern.is_regex
-                                          else f'phrase "{pattern.value}"')
-            embed = discord.Embed(title=title, description=str(stats),
-                                  color=0x6C7EFF)
-            await chan.send(embed=embed)
-            return True
-        else:
-            await chan.send(file=discord.File(stats, 'mstats_result.png'))
-
-    async def pin_msg(self, payload: discord.RawReactionActionEvent):
-        if payload.emoji.name != '📌':
-            return False
-
-        chan: discord.TextChannel = self.get_channel(payload.channel_id)
-        guild: discord.Guild = chan.guild
-        pinner = await self.fetch_user(payload.user_id)
-        orig_msg: discord.Message = await chan.fetch_message(payload.message_id)
-
-        if db.pins.get_pin_msg_id(orig_msg.guild.id, orig_msg.id):
-            return True
-
-        pins_channel = db.config.get_pins_channel(orig_msg.guild.id)
-        if pins_channel is None:
-            await send_error(orig_msg.channel, ErrorStrings.no_pins_channel)
-            return True
-        pins_channel = guild.get_channel(pins_channel)
-
-        embed = self.create_embed_from_msgs(orig_msg)
-        embed.set_footer(text=f'Pinned by {pinner.name}',
-                         icon_url=pinner.avatar_url)
-        try:
-            pinned_msg = await pins_channel.send(embed=embed)
-        except discord.Forbidden:
-            await send_error(orig_msg.channel,
-                             f'Bot is not allowed to post in your pins '
-                             f'channel (#{pins_channel.name}).')
-        except discord.HTTPException as e:
-            await send_error(orig_msg.channel, e)
-        else:
-            db.pins.pin_message(guild.id, orig_msg.id, pinned_msg.id)
-
-        return True
-
-    async def unpin_msg(self, payload: discord.RawReactionActionEvent):
-        if payload.emoji.name != '📌':
-            return False
-
-        chan: discord.TextChannel = self.get_channel(payload.channel_id)
-        guild: discord.Guild = chan.guild
-        orig_msg: discord.Message = await chan.fetch_message(payload.message_id)
-
-        pinned_msg_id = db.pins.unpin_message(guild.id, orig_msg.id)
-        if not pinned_msg_id:
-            return False
-
-        pins_channel = db.config.get_pins_channel(guild.id)
-        if not pins_channel:
-            await send_error(orig_msg.channel, ErrorStrings.no_pins_channel)
-        pins_channel: discord.TextChannel = guild.get_channel(pins_channel)
-
-        pinned_msg = await pins_channel.fetch_message(pinned_msg_id)
-        try:
-            await pinned_msg.delete()
-        except discord.Forbidden:
-            await send_error(orig_msg.channel,
-                             f'Bot is not allowed to delete this pin in your '
-                             f'pins channel (#{pins_channel.name})')
-        except discord.HTTPException as e:
-            await send_error(orig_msg.channel, e)
 
     # Ranked Trio memes
 
