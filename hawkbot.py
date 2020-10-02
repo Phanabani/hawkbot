@@ -104,9 +104,9 @@ class Hawkbot(discord.Client):
 
     async def hawktober_scheduler(self):
         delta = timedelta(days=1)
-        run_time = datetime(2020, 10, 1, 5)
+        run_time = datetime(2020, 10, 2, 4)
 
-        while run_time < datetime(2020, 11, 1, 5):
+        while run_time < datetime(2020, 11, 1, 4):
             await discord.utils.sleep_until(run_time)
             await self.send_hawktober()
             await asyncio.sleep(1)
