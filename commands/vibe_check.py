@@ -21,5 +21,6 @@ def vibe_check():
 def hawktober():
     noun = random.choice(nouns)
     adj = random.choice(adjectives)
+    prompt = random.choice((noun, adj))
     now = datetime.now()
-    return f'**{now:%B %d, %Y}:** *{adj} {noun}*'
+    return f'**{now:%B %d, %Y}:** *{prompt}*'
